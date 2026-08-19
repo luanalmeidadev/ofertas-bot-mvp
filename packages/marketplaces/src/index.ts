@@ -91,6 +91,20 @@ export class MockShopeeProvider implements MarketplaceProvider {
       commissionRate: 7,
       couponCode: 'WATCH20',
     },
+    {
+      marketplace: 'SHOPEE',
+      externalId: 'shp-007',
+      title: 'Caixa de som Bluetooth portátil',
+      category: 'Eletronicos',
+      productUrl: 'https://example.test/shopee/shp-007',
+      currentPrice: 129.9,
+      originalPrice: 249.9,
+      discountPercent: 48,
+      rating: 4.8,
+      salesCount: 5400,
+      commissionRate: 7,
+      couponCode: 'SOM20',
+    },
   ];
 }
 

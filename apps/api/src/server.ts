@@ -179,13 +179,70 @@ app.post('/offers/publish-auto', async () => {
     },
   });
 
+  const now = new Date();
+
+  const [startHour, startMinute] = (channel.allowedStartTime ?? '08:00')
+    .split(':')
+    .map(Number);
+
+  const [endHour, endMinute] = (channel.allowedEndTime ?? '23:00')
+    .split(':')
+    .map(Number);
+
+  const start = new Date(now);
+  start.setHours(startHour, startMinute, 0, 0);
+
+  const end = new Date(now);
+  end.setHours(endHour, endMinute, 0, 0);
+
+  let baseStart = now;
+
+  if (now < start) {
+    baseStart = start;
+  } else if (now > end) {
+    baseStart = new Date(start);
+    baseStart.setDate(baseStart.getDate() + 1);
+  }
+
+  const scheduled: Array<{
+  offerId: string;
+  scheduledAt: string;
+  }> = [];
+
   for (const [index, offer] of offers.entries()) {
-  const baseDelay = index * channel.minIntervalSeconds * 1000;
+  const batch = Math.floor(index / channel.maxPostsPerHour);
+  const position = index % channel.maxPostsPerHour;
+
+  const hourDelay = batch * 60 * 60 * 1000;
+
+  const intervalDelay =
+    position * channel.minIntervalSeconds * 1000;
 
   const jitter =
     Math.floor(Math.random() * 90) * 1000;
 
-  const delay = baseDelay + jitter;
+  const scheduledAt = new Date(
+      baseStart.getTime() + hourDelay + intervalDelay + jitter,
+    );
+
+    if (scheduledAt > end && baseStart.getDate() === now.getDate()) {
+      const tomorrow = new Date(start);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      scheduledAt.setTime(
+        tomorrow.getTime() + hourDelay + intervalDelay + jitter,
+      );
+    }
+
+    const delay = Math.max(
+      0,
+      scheduledAt.getTime() - Date.now(),
+    );
+
+    scheduled.push({
+      offerId: offer.id,
+      scheduledAt: new Date(Date.now() + delay).toISOString(),
+    });
 
     await offerQueue.add(
       'publish-offer',
@@ -201,6 +258,8 @@ app.post('/offers/publish-auto', async () => {
           type: 'exponential',
           delay: 5000,
         },
+        removeOnComplete: true,
+        removeOnFail: false,
       },
     );
 
@@ -214,9 +273,15 @@ app.post('/offers/publish-auto', async () => {
     });
   }
 
-  return {
+ return {
     queued: offers.length,
     intervalSeconds: channel.minIntervalSeconds,
+    maxPostsPerHour: channel.maxPostsPerHour,
+    window: {
+      start: channel.allowedStartTime,
+      end: channel.allowedEndTime,
+    },
+    scheduled,
   };
 });
 

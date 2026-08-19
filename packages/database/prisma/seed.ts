@@ -40,16 +40,22 @@ async function main() {
     {
       name: 'Ofertas Gerais',
       type: 'MOCK',
+      allowedStartTime: '08:00',
+      allowedEndTime: '23:00',
     },
     {
       name: 'Ofertas Shopee',
       type: 'MOCK',
       marketplaceFilter: 'SHOPEE',
+      allowedStartTime: '08:00',
+      allowedEndTime: '23:00',
     },
     {
       name: 'Ofertas Mercado Livre',
       type: 'MOCK',
       marketplaceFilter: 'MERCADO_LIVRE',
+      allowedStartTime: '08:00',
+      allowedEndTime: '23:00',
     },
   ];
 
@@ -58,7 +64,12 @@ async function main() {
       where: { name: channel.name },
     });
 
-    if (!exists) {
+    if (exists) {
+      await prisma.channel.update({
+        where: { id: exists.id },
+        data: channel,
+      });
+    } else {
       await prisma.channel.create({
         data: channel,
       });
