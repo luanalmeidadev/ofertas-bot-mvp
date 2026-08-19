@@ -1,6 +1,12 @@
 import Fastify from 'fastify';
+import { offerQueue } from './queue.js';
 import { prisma } from '@ofertas/database';
-import { OfferEngine, decideOffer } from '@ofertas/core';
+import {
+  OfferEngine,
+  decideOffer,
+  renderOfferPost,
+} from '@ofertas/core';
+
 import {
   MockMercadoLivreProvider,
   MockShopeeProvider,
@@ -18,7 +24,11 @@ const providers = [
   new MockMercadoLivreProvider(),
 ];
 
-app.get('/health', async () => ({ ok: true }));
+app.get('/health', async () => ({
+  ok: true,
+}));
+
+// IMPORTA E ANALISA OFERTAS
 
 app.post('/offers/import', async () => {
   let imported = 0;
@@ -26,7 +36,9 @@ app.post('/offers/import', async () => {
 
   for (const provider of providers) {
     const marketplace = await prisma.marketplace.findUniqueOrThrow({
-      where: { slug: provider.marketplace },
+      where: {
+        slug: provider.marketplace,
+      },
     });
 
     const products = await provider.getDeals();
@@ -82,6 +94,7 @@ app.post('/offers/import', async () => {
         continue;
       }
 
+      // Não cria novamente a mesma oferta nas últimas 24 horas.
       const recentOffer = await prisma.offer.findFirst({
         where: {
           productId: product.id,
@@ -100,6 +113,10 @@ app.post('/offers/import', async () => {
 
       const decision = decideOffer(offer.score);
 
+      if (decision === 'REJECT') {
+        continue;
+      }
+
       const affiliateUrl =
         await provider.generateAffiliateLink(item);
 
@@ -114,6 +131,7 @@ app.post('/offers/import', async () => {
           affiliateUrl,
           couponCode: item.couponCode,
           score: offer.score,
+          decision,
           status: 'NEW',
         },
       });
@@ -141,7 +159,70 @@ app.post('/offers/import', async () => {
   };
 });
 
-const port = Number(process.env.API_PORT ?? 3333);
+// PUBLICA AUTOMATICAMENTE OFERTAS COM DECISÃO AUTO
+
+app.post('/offers/publish-auto', async () => {
+  const channel = await prisma.channel.findFirstOrThrow({
+    where: {
+      name: 'Ofertas Gerais',
+      status: 'ACTIVE',
+    },
+  });
+
+  const offers = await prisma.offer.findMany({
+    where: {
+      status: 'NEW',
+      decision: 'AUTO',
+    },
+    orderBy: {
+      detectedAt: 'asc',
+    },
+  });
+
+  for (const [index, offer] of offers.entries()) {
+  const baseDelay = index * channel.minIntervalSeconds * 1000;
+
+  const jitter =
+    Math.floor(Math.random() * 90) * 1000;
+
+  const delay = baseDelay + jitter;
+
+    await offerQueue.add(
+      'publish-offer',
+      {
+        offerId: offer.id,
+        channelId: channel.id,
+      },
+      {
+        jobId: `offer-${offer.id}-${channel.id}`,
+        delay,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+      },
+    );
+
+    await prisma.offer.update({
+      where: {
+        id: offer.id,
+      },
+      data: {
+        status: 'QUEUED',
+      },
+    });
+  }
+
+  return {
+    queued: offers.length,
+    intervalSeconds: channel.minIntervalSeconds,
+  };
+});
+
+const port = Number(
+  process.env.API_PORT ?? 3333,
+);
 
 await app.listen({
   port,

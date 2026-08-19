@@ -68,22 +68,78 @@ export function decideOffer(score: number): OfferDecision {
   return 'REJECT';
 }
 
-export function renderOfferPost(offer: DetectedOffer, affiliateUrl: string): string {
-  const before = offer.originalPrice ? `De: R$ ${offer.originalPrice.toFixed(2).replace('.', ',')}\n` : '';
-  const coupon = offer.couponCode ? `\n🎟️ Cupom: ${offer.couponCode}\n` : '';
+function generateOfferHook(offer: DetectedOffer): string {
+  const text = `${offer.title} ${offer.category ?? ''}`.toLowerCase();
+
+  if (text.includes('air fryer')) {
+    return '🍟 Air Fryer nesse preço? A dieta que lute 😂🔥';
+  }
+
+  if (
+    text.includes('fone') ||
+    text.includes('headphone') ||
+    text.includes('earbuds')
+  ) {
+    return '🎧 Pra quem tava precisando de fone novo, olha esse achado! 👀🔥';
+  }
+
+  if (text.includes('ssd')) {
+    return '💻 Tá faltando espaço no PC? Olha o preço desse SSD 👀🔥';
+  }
+
+  if (
+    text.includes('tenis') ||
+    text.includes('tênis')
+  ) {
+    return '👟 Achadinho pra renovar o tênis sem judiar do bolso 🔥';
+  }
+
+  if (
+    text.includes('cozinha') ||
+    text.includes('casa')
+  ) {
+    return '🏠 Achadinho útil pra casa com preço bom de verdade 👀';
+  }
+
+  if ((offer.discountPercent ?? 0) >= 40) {
+    return `🚨 EITA! ${offer.discountPercent}% OFF nisso aqui 👀🔥`;
+  }
+
+  return '🔥 Olha esse achadinho que apareceu agora! 👀';
+}
+
+export function renderOfferPost(
+  offer: DetectedOffer,
+  affiliateUrl: string,
+): string {
+  const oldPrice = offer.originalPrice
+    ? `De ~R$ ${offer.originalPrice.toFixed(2).replace('.', ',')}~`
+    : '';
+
+  const discount = offer.discountPercent
+    ? `🔥 ${offer.discountPercent}% OFF`
+    : '';
+
+  const coupon = offer.couponCode
+    ? `🎟️ Cupom: ${offer.couponCode}`
+    : '';
 
   return [
-    '🔥 OFERTA ENCONTRADA!',
+    generateOfferHook(offer),
+'',
+`*${offer.title}*`,
     '',
-    offer.title,
+    oldPrice,
+    `Por *R$ ${offer.currentPrice.toFixed(2).replace('.', ',')}* 🔥`,
+    discount,
     '',
-    before.trimEnd(),
-    `🔥 Por: R$ ${offer.currentPrice.toFixed(2).replace('.', ',')}`,
-    offer.discountPercent ? `💰 ${offer.discountPercent}% OFF` : '',
-    coupon.trim(),
+    coupon,
+    coupon ? '' : null,
+    '👉 Pegar promoção:',
+    affiliateUrl,
     '',
-    `🛒 Comprar: ${affiliateUrl}`,
-    '',
-    '⚠️ Preco e disponibilidade podem mudar.'
-  ].filter(Boolean).join('\n');
+    '⚠️ Preço pode mudar a qualquer momento.',
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
 }

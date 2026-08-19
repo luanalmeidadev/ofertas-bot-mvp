@@ -10,8 +10,11 @@
   "dependencies": {
     "@ofertas/channels": "0.0.1",
     "@ofertas/core": "0.0.1",
+    "@ofertas/database": "^0.0.1",
     "@ofertas/marketplaces": "0.0.1",
-    "fastify": "^5.11.2"
+    "bullmq": "^6.1.2",
+    "fastify": "^5.11.2",
+    "ioredis": "^6.0.0"
   },
   "devDependencies": {
     "tsx": "^4.20.0",

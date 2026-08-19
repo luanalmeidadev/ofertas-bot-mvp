@@ -84,6 +84,7 @@ model Offer {
   affiliateUrl      String?
   couponCode        String?
   couponDescription String?
+  decision          String?
   score             Int
   status             OfferStatus   @default(NEW)
   detectedAt         DateTime      @default(now())
