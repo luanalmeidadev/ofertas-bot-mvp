@@ -1,0 +1,20 @@
+{
+  "name": "ofertas-bot-mvp",
+  "private": true,
+  "packageManager": "npm@11",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @ofertas/api",
+    "db:generate": "npm run db:generate -w @ofertas/database",
+    "db:migrate": "npm run db:migrate -w @ofertas/database",
+    "db:seed": "npm run db:seed -w @ofertas/database"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.9.1": true,
+    "esbuild@0.28.2": true,
+    "prisma@7.9.1": true
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@ofertas/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@ofertas/channels": "0.0.1",
+    "@ofertas/core": "0.0.1",
+    "@ofertas/marketplaces": "0.0.1",
+    "fastify": "^5.11.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

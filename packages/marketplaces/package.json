@@ -1,0 +1,10 @@
+{
+  "name": "@ofertas/marketplaces",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ofertas/shared": "0.0.1"
+  },
+  "exports": { ".": "./src/index.ts" }
+}
