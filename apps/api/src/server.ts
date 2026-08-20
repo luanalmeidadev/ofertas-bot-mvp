@@ -362,6 +362,51 @@ app.post('/offers/:id/approve', async (request, reply) => {
   };
 });
 
+app.get('/queue', async () => {
+  const jobs = await offerQueue.getJobs([
+    'waiting',
+    'delayed',
+    'active',
+    'failed',
+  ]);
+
+  return jobs.map((job) => ({
+    id: job.id,
+    name: job.name,
+    state: job.getState(),
+    data: job.data,
+    delay: job.delay,
+    timestamp: job.timestamp,
+  }));
+});
+
+app.get('/publications', async () => {
+  const publications = await prisma.publication.findMany({
+    include: {
+      offer: {
+        include: {
+          product: true,
+        },
+      },
+      channel: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: 50,
+  });
+
+  return publications.map((publication) => ({
+    id: publication.id,
+    product: publication.offer.product.title,
+    channel: publication.channel.name,
+    status: publication.status,
+    scheduledAt: publication.scheduledAt,
+    publishedAt: publication.publishedAt,
+    createdAt: publication.createdAt,
+  }));
+});
+
 const port = Number(
   process.env.API_PORT ?? 3333,
 );

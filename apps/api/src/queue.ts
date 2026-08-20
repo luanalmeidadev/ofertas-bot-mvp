@@ -92,6 +92,7 @@ new Worker(
         channelId,
         content,
         imageUrl: offer.product.imageUrl,
+        scheduledAt: new Date(job.timestamp + job.delay),
         status: 'PROCESSING',
       },
     });
