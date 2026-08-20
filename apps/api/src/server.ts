@@ -370,14 +370,41 @@ app.get('/queue', async () => {
     'failed',
   ]);
 
-  return jobs.map((job) => ({
-    id: job.id,
-    name: job.name,
-    state: job.getState(),
-    data: job.data,
-    delay: job.delay,
-    timestamp: job.timestamp,
-  }));
+  const items = await Promise.all(
+    jobs.map(async (job) => {
+      const state = await job.getState();
+
+      const offer = await prisma.offer.findUnique({
+        where: {
+          id: job.data.offerId,
+        },
+        include: {
+          product: {
+            include: {
+              marketplace: true,
+            },
+          },
+        },
+      });
+
+      return {
+        id: job.id,
+        state,
+        offerId: job.data.offerId,
+
+        product: offer?.product.title ?? 'Produto não encontrado',
+
+        marketplace:
+          offer?.product.marketplace.slug ?? null,
+
+        scheduledAt: new Date(
+          job.timestamp + job.delay,
+        ).toISOString(),
+      };
+    }),
+  );
+
+  return items;
 });
 
 app.get('/publications', async () => {
