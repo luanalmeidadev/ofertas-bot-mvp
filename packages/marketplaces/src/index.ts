@@ -158,6 +158,19 @@ export class MockMercadoLivreProvider implements MarketplaceProvider {
       salesCount: 1100,
       commissionRate: 2,
     },
+    {
+      marketplace: 'MERCADO_LIVRE',
+      externalId: 'mlb-004',
+      title: 'Aspirador vertical 2 em 1',
+      category: 'Casa',
+      productUrl: 'https://example.test/ml/mlb-004',
+      currentPrice: 179.9,
+      originalPrice: 239.9,
+      discountPercent: 25,
+      rating: 4.6,
+      salesCount: 1500,
+      commissionRate: 5,
+    },
   ];
 }
 

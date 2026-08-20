@@ -285,6 +285,83 @@ app.post('/offers/publish-auto', async () => {
   };
 });
 
+app.get('/offers/review', async () => {
+  const offers = await prisma.offer.findMany({
+    where: {
+      status: 'NEW',
+      decision: 'REVIEW',
+    },
+    include: {
+      product: {
+        include: {
+          marketplace: true,
+        },
+      },
+    },
+    orderBy: {
+      detectedAt: 'desc',
+    },
+  });
+
+  return offers.map((offer) => ({
+    id: offer.id,
+    marketplace: offer.product.marketplace.slug,
+    title: offer.product.title,
+    imageUrl: offer.product.imageUrl,
+    currentPrice: Number(offer.currentPrice),
+    originalPrice: offer.originalPrice
+      ? Number(offer.originalPrice)
+      : null,
+    discountPercent: offer.discountPercent,
+    score: offer.score,
+    couponCode: offer.couponCode,
+    detectedAt: offer.detectedAt,
+  }));
+});
+
+app.post('/offers/:id/approve', async (request, reply) => {
+  const { id } = request.params as { id: string };
+
+  const offer = await prisma.offer.findUnique({
+    where: { id },
+  });
+
+  if (!offer) {
+    return reply.code(404).send({
+      error: 'Oferta não encontrada.',
+    });
+  }
+
+  if (offer.status !== 'NEW' || offer.decision !== 'REVIEW') {
+    return reply.code(400).send({
+      error: 'Oferta não está aguardando revisão.',
+    });
+  }
+
+  const updated = await prisma.offer.update({
+    where: { id },
+    data: {
+      decision: 'AUTO',
+    },
+  });
+
+  await prisma.eventLog.create({
+    data: {
+      entityId: id,
+      event: 'OFFER_APPROVED',
+      metadata: {
+        previousDecision: 'REVIEW',
+        newDecision: 'AUTO',
+      },
+    },
+  });
+
+  return {
+    id: updated.id,
+    approved: true,
+  };
+});
+
 const port = Number(
   process.env.API_PORT ?? 3333,
 );
