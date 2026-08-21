@@ -6,5 +6,10 @@
   "dependencies": {
     "@ofertas/shared": "0.0.1"
   },
-  "exports": { ".": "./src/index.ts" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0"
+  }
 }

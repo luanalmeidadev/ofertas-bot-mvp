@@ -1,9 +1,179 @@
-import type { MarketplaceSlug, NormalizedProduct } from '@ofertas/shared';
+import fs from 'node:fs/promises';
+import type {
+  MarketplaceSlug,
+  NormalizedProduct,
+} from '@ofertas/shared';
 
 export interface MarketplaceProvider {
   readonly marketplace: MarketplaceSlug;
   getDeals(): Promise<NormalizedProduct[]>;
-  generateAffiliateLink(product: NormalizedProduct): Promise<string>;
+  generateAffiliateLink(
+    product: NormalizedProduct,
+  ): Promise<string>;
+}
+
+export class ShopeeCsvProvider implements MarketplaceProvider {
+  readonly marketplace = 'SHOPEE' as const;
+
+  constructor(
+    private readonly csvPath: string,
+  ) {}
+
+  async getDeals(): Promise<NormalizedProduct[]> {
+    const csv = await fs.readFile(this.csvPath, 'utf8');
+
+    const lines = csv
+      .split(/\r?\n/)
+      .filter(Boolean);
+
+    const [, ...rows] = lines;
+
+    return rows.map((line: string) => {
+      const columns = this.parseCsvLine(line);
+
+      const [
+        itemId,
+        itemName,
+        price,
+        sales,
+        sellerName,
+        commissionRate,
+        commission,
+        productLink,
+        offerLink,
+      ] = columns;
+
+      if (
+        !itemId ||
+        !itemName ||
+        !price ||
+        !sales ||
+        !sellerName ||
+        !commissionRate ||
+        !commission ||
+        !productLink ||
+        !offerLink
+      ) {
+        throw new Error(
+          `Linha inválida no CSV da Shopee: ${line}`,
+        );
+      }
+
+      return {
+        marketplace: 'SHOPEE',
+        externalId: itemId,
+        title: itemName,
+        sellerName,
+        productUrl: productLink,
+        currentPrice: this.parseNumber(price),
+        salesCount: this.parseSales(sales),
+        commissionRate: this.parsePercent(commissionRate),
+        commissionValue: this.parseCurrency(commission),
+        metadata: {
+          offerLink,
+        },
+      };
+    });
+  }
+
+  async generateAffiliateLink(
+    product: NormalizedProduct,
+  ): Promise<string> {
+    const offerLink =
+      product.metadata?.offerLink;
+
+    if (
+      typeof offerLink !== 'string' ||
+      !offerLink
+    ) {
+      throw new Error(
+        `Offer Link não encontrado para ${product.externalId}`,
+      );
+    }
+
+    return offerLink;
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let insideQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (char === '"') {
+        insideQuotes = !insideQuotes;
+        continue;
+      }
+
+      if (char === ',' && !insideQuotes) {
+        result.push(current.trim());
+        current = '';
+        continue;
+      }
+
+      current += char;
+    }
+
+    result.push(current.trim());
+
+    return result;
+  }
+
+  private parseNumber(value: string): number {
+    return Number(
+      value
+        .replace(/\./g, '')
+        .replace(',', '.'),
+    );
+  }
+
+  private parsePercent(value: string): number {
+    return Number(
+      value.replace('%', '').trim(),
+    );
+  }
+
+  private parseCurrency(value: string): number {
+    return Number(
+      value
+        .replace('R$', '')
+        .trim()
+        .replace(/\./g, '')
+        .replace(',', '.'),
+    );
+  }
+
+  private parseSales(value: string): number {
+    const normalized = value
+      .toLowerCase()
+      .replace(/\s/g, '');
+
+    if (normalized.includes('mi+')) {
+      return (
+        Number(
+          normalized
+            .replace('mi+', '')
+            .replace(',', '.'),
+        ) * 1_000_000
+      );
+    }
+
+    if (normalized.includes('mil+')) {
+      return (
+        Number(
+          normalized
+            .replace('mil+', '')
+            .replace(',', '.'),
+        ) * 1_000
+      );
+    }
+
+    return Number(
+      normalized.replace(/\D/g, ''),
+    );
+  }
 }
 
 export class MockShopeeProvider implements MarketplaceProvider {

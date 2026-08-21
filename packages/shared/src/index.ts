@@ -16,6 +16,7 @@ export type NormalizedProduct = {
   commissionRate?: number;
   commissionValue?: number;
   couponCode?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type DetectedOffer = NormalizedProduct & {

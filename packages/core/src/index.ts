@@ -24,15 +24,31 @@ export function calculateOfferScore(product: NormalizedProduct): { score: number
     reasons.push('avaliacao alta');
   }
 
-  if ((product.salesCount ?? 0) >= 1000) {
-    score += 10;
-    reasons.push('alto volume de vendas');
-  }
+  const sales = product.salesCount ?? 0;
 
-  if ((product.commissionRate ?? 0) >= 5) {
-    score += 15;
-    reasons.push('boa comissao');
-  }
+if (sales >= 1_000_000) {
+  score += 30;
+  reasons.push('produto extremamente vendido');
+} else if (sales >= 100_000) {
+  score += 20;
+  reasons.push('produto muito vendido');
+} else if (sales >= 10_000) {
+  score += 10;
+  reasons.push('bom volume de vendas');
+}
+
+const commission = product.commissionRate ?? 0;
+
+if (commission >= 15) {
+  score += 40;
+  reasons.push('comissao excelente');
+} else if (commission >= 10) {
+  score += 30;
+  reasons.push('comissao alta');
+} else if (commission >= 5) {
+  score += 15;
+  reasons.push('boa comissao');
+}
 
   if (product.couponCode) {
     score += 15;
