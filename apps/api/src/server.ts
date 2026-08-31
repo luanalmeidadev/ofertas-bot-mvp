@@ -49,6 +49,7 @@ app.get('/health', async () => ({
 app.post('/offers/import', async () => {
   let imported = 0;
   let detected = 0;
+  const autoOfferIds: string[] = [];
 
   for (const provider of providers) {
     const marketplace =
@@ -141,7 +142,7 @@ app.post('/offers/import', async () => {
       const affiliateUrl =
         await provider.generateAffiliateLink(item);
 
-      await prisma.offer.create({
+      const createdOffer = await prisma.offer.create({
         data: {
           productId: product.id,
           currentPrice: item.currentPrice,
@@ -156,6 +157,10 @@ app.post('/offers/import', async () => {
           status: 'NEW',
         },
       });
+
+      if (decision === 'AUTO') {
+        autoOfferIds.push(createdOffer.id);
+      }
 
       await prisma.eventLog.create({
         data: {
@@ -174,16 +179,35 @@ app.post('/offers/import', async () => {
     }
   }
 
+  let queued = 0;
+  let queueError: string | null = null;
+
+  try {
+    if (autoOfferIds.length > 0) {
+      const queueResult =
+        await queueAutoOffers(autoOfferIds);
+
+      queued = queueResult.queued;
+    }
+  } catch {
+    queueError =
+      'Falha ao enfileirar ofertas automaticamente.';
+  }
+
   return {
     imported,
     detected,
+    queued,
+    queueError,
   };
 });
 
 /**
  * COLOCA OFERTAS AUTO NA FILA
  */
-app.post('/offers/publish-auto', async () => {
+async function queueAutoOffers(
+  offerIds?: string[],
+) {
   const channel =
     await prisma.channel.findFirstOrThrow({
       where: {
@@ -196,6 +220,13 @@ app.post('/offers/publish-auto', async () => {
     where: {
       status: 'NEW',
       decision: 'AUTO',
+      ...(offerIds
+        ? {
+            id: {
+              in: offerIds,
+            },
+          }
+        : {}),
     },
     orderBy: {
       detectedAt: 'asc',
@@ -330,9 +361,26 @@ app.post('/offers/publish-auto', async () => {
       },
     );
 
-    await prisma.offer.update({
+    if (!offerIds) {
+      await prisma.offer.update({
+        where: {
+          id: offer.id,
+        },
+        data: {
+          status: 'QUEUED',
+        },
+      });
+    }
+  }
+
+  if (offerIds && offers.length > 0) {
+    await prisma.offer.updateMany({
       where: {
-        id: offer.id,
+        id: {
+          in: offers.map((offer) => offer.id),
+        },
+        status: 'NEW',
+        decision: 'AUTO',
       },
       data: {
         status: 'QUEUED',
@@ -356,6 +404,10 @@ app.post('/offers/publish-auto', async () => {
 
     scheduled,
   };
+}
+
+app.post('/offers/publish-auto', async () => {
+  return queueAutoOffers();
 });
 
 /**
