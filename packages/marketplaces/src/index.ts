@@ -13,6 +13,27 @@ export interface MarketplaceProvider {
   ): Promise<string>;
 }
 
+type ShopeeProductOffer = {
+  itemId: number;
+  commissionRate: string;
+  commission: string;
+  price: string;
+  sales: number;
+  imageUrl: string;
+  productName: string;
+  shopName: string;
+  productLink: string;
+  offerLink: string;
+  priceMin?: string;
+  priceMax?: string;
+  productCatIds?: number[];
+  ratingStar?: string;
+  priceDiscountRate?: number;
+  shopId?: number;
+  sellerCommissionRate?: string;
+  shopeeCommissionRate?: string;
+};
+
 export class ShopeeApiProvider implements MarketplaceProvider {
   readonly marketplace = 'SHOPEE' as const;
 
@@ -25,12 +46,39 @@ export class ShopeeApiProvider implements MarketplaceProvider {
   ) {}
 
   async getDeals(): Promise<NormalizedProduct[]> {
+    const rankings = await Promise.all([
+      this.getProductOffers(2),
+      this.getProductOffers(5),
+    ]);
+
+    const itemsById = new Map<
+      number,
+      ShopeeProductOffer
+    >();
+
+    for (const items of rankings) {
+      for (const item of items) {
+        if (!itemsById.has(item.itemId)) {
+          itemsById.set(item.itemId, item);
+        }
+      }
+    }
+
+    return Array.from(
+      itemsById.values(),
+      (item) => this.normalizeProduct(item),
+    );
+  }
+
+  private async getProductOffers(
+    sortType: 2 | 5,
+  ): Promise<ShopeeProductOffer[]> {
     const query = `{
       productOfferV2(
         listType: 0,
-        sortType: 2,
+        sortType: ${sortType},
         page: 1,
-        limit: 10
+        limit: 20
       ) {
         nodes {
           itemId
@@ -111,26 +159,7 @@ export class ShopeeApiProvider implements MarketplaceProvider {
       await response.json() as {
         data?: {
           productOfferV2?: {
-            nodes?: Array<{
-              itemId: number;
-              commissionRate: string;
-              commission: string;
-              price: string;
-              sales: number;
-              imageUrl: string;
-              productName: string;
-              shopName: string;
-              productLink: string;
-              offerLink: string;
-              priceMin?: string;
-              priceMax?: string;
-              productCatIds?: number[];
-              ratingStar?: string;
-              priceDiscountRate?: number;
-              shopId?: number;
-              sellerCommissionRate?: string;
-              shopeeCommissionRate?: string;
-            }>;
+            nodes?: ShopeeProductOffer[];
           };
         };
 
@@ -155,85 +184,88 @@ export class ShopeeApiProvider implements MarketplaceProvider {
       );
     }
 
-    const nodes =
+    return (
       result.data?.productOfferV2
-        ?.nodes ?? [];
+        ?.nodes ?? []
+    );
+  }
 
-    return nodes.map((item) => {
-      const currentPrice =
-        Number(item.price);
+  private normalizeProduct(
+    item: ShopeeProductOffer,
+  ): NormalizedProduct {
+    const currentPrice =
+      Number(item.price);
 
-      const priceMax =
-        item.priceMax
-          ? Number(item.priceMax)
-          : undefined;
+    const priceMax =
+      item.priceMax
+        ? Number(item.priceMax)
+        : undefined;
 
-      return {
-        marketplace: 'SHOPEE',
+    return {
+      marketplace: 'SHOPEE',
 
-        externalId:
-          String(item.itemId),
+      externalId:
+        String(item.itemId),
 
-        title:
-          item.productName,
+      title:
+        item.productName,
 
-        sellerName:
-          item.shopName,
+      sellerName:
+        item.shopName,
 
-        productUrl:
-          item.productLink,
+      productUrl:
+        item.productLink,
 
-        imageUrl:
-          item.imageUrl,
+      imageUrl:
+        item.imageUrl,
 
-        currentPrice,
+      currentPrice,
 
-        originalPrice:
-          priceMax &&
-          priceMax > currentPrice
-            ? priceMax
-            : undefined,
+      originalPrice:
+        priceMax &&
+        priceMax > currentPrice
+          ? priceMax
+          : undefined,
 
-        discountPercent:
-          item.priceDiscountRate,
+      discountPercent:
+        item.priceDiscountRate,
 
-        rating:
-          item.ratingStar
-            ? Number(item.ratingStar)
-            : undefined,
+      rating:
+        item.ratingStar
+          ? Number(item.ratingStar)
+          : undefined,
 
-        salesCount:
-          item.sales,
+      salesCount:
+        item.sales,
 
-        // A API retorna 0.13 para 13%.
-        // Nosso motor trabalha com 13.
-        commissionRate:
-          Number(
-            item.commissionRate,
-          ) * 100,
+      // A API retorna 0.13 para 13%.
+      // Nosso motor trabalha com 13.
+      commissionRate:
+        Number(
+          item.commissionRate,
+        ) * 100,
 
-        commissionValue:
-          Number(item.commission),
+      commissionValue:
+        Number(item.commission),
 
-        category:
-          item.productCatIds
-            ?.join(','),
+      category:
+        item.productCatIds
+          ?.join(','),
 
-        metadata: {
-          offerLink:
-            item.offerLink,
+      metadata: {
+        offerLink:
+          item.offerLink,
 
-          shopId:
-            item.shopId,
+        shopId:
+          item.shopId,
 
-          sellerCommissionRate:
-            item.sellerCommissionRate,
+        sellerCommissionRate:
+          item.sellerCommissionRate,
 
-          shopeeCommissionRate:
-            item.shopeeCommissionRate,
-        },
-      };
-    });
+        shopeeCommissionRate:
+          item.shopeeCommissionRate,
+      },
+    };
   }
 
   async generateAffiliateLink(
