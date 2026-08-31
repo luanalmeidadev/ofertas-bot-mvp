@@ -93,6 +93,7 @@ export class ShopeeApiProvider implements MarketplaceProvider {
       this.endpoint,
       {
         method: 'POST',
+        signal: AbortSignal.timeout(10000),
 
         headers: {
           'Content-Type':
