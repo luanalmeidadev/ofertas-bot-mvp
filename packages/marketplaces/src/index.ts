@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
 import type {
   MarketplaceSlug,
   NormalizedProduct,
@@ -10,6 +11,247 @@ export interface MarketplaceProvider {
   generateAffiliateLink(
     product: NormalizedProduct,
   ): Promise<string>;
+}
+
+export class ShopeeApiProvider implements MarketplaceProvider {
+  readonly marketplace = 'SHOPEE' as const;
+
+  private readonly endpoint =
+    'https://open-api.affiliate.shopee.com.br/graphql';
+
+  constructor(
+    private readonly appId: string,
+    private readonly secret: string,
+  ) {}
+
+  async getDeals(): Promise<NormalizedProduct[]> {
+    const query = `{
+      productOfferV2(
+        listType: 0,
+        sortType: 2,
+        page: 1,
+        limit: 10
+      ) {
+        nodes {
+          itemId
+          commissionRate
+          commission
+          price
+          sales
+          imageUrl
+          productName
+          shopName
+          productLink
+          offerLink
+          periodEndTime
+          periodStartTime
+          priceMin
+          priceMax
+          productCatIds
+          ratingStar
+          priceDiscountRate
+          shopId
+          shopType
+          sellerCommissionRate
+          shopeeCommissionRate
+        }
+
+        pageInfo {
+          page
+          limit
+          hasNextPage
+          scrollId
+        }
+      }
+    }`;
+
+    const payload = JSON.stringify({
+      query,
+    });
+
+    const timestamp = Math.floor(
+      Date.now() / 1000,
+    ).toString();
+
+    const signatureFactor =
+      this.appId +
+      timestamp +
+      payload +
+      this.secret;
+
+    const signature = crypto
+      .createHash('sha256')
+      .update(signatureFactor)
+      .digest('hex');
+
+    const authorization =
+      `SHA256 Credential=${this.appId},` +
+      `Timestamp=${timestamp},` +
+      `Signature=${signature}`;
+
+    const response = await fetch(
+      this.endpoint,
+      {
+        method: 'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json',
+
+          Authorization:
+            authorization,
+        },
+
+        body: payload,
+      },
+    );
+
+    const result =
+      await response.json() as {
+        data?: {
+          productOfferV2?: {
+            nodes?: Array<{
+              itemId: number;
+              commissionRate: string;
+              commission: string;
+              price: string;
+              sales: number;
+              imageUrl: string;
+              productName: string;
+              shopName: string;
+              productLink: string;
+              offerLink: string;
+              priceMin?: string;
+              priceMax?: string;
+              productCatIds?: number[];
+              ratingStar?: string;
+              priceDiscountRate?: number;
+              shopId?: number;
+              sellerCommissionRate?: string;
+              shopeeCommissionRate?: string;
+            }>;
+          };
+        };
+
+        errors?: Array<{
+          message?: string;
+        }>;
+      };
+
+    if (!response.ok) {
+      throw new Error(
+        `Shopee API HTTP ${response.status}`,
+      );
+    }
+
+    if (result.errors?.length) {
+      throw new Error(
+        `Shopee API: ${
+          result.errors
+            .map((error) => error.message)
+            .join('; ')
+        }`,
+      );
+    }
+
+    const nodes =
+      result.data?.productOfferV2
+        ?.nodes ?? [];
+
+    return nodes.map((item) => {
+      const currentPrice =
+        Number(item.price);
+
+      const priceMax =
+        item.priceMax
+          ? Number(item.priceMax)
+          : undefined;
+
+      return {
+        marketplace: 'SHOPEE',
+
+        externalId:
+          String(item.itemId),
+
+        title:
+          item.productName,
+
+        sellerName:
+          item.shopName,
+
+        productUrl:
+          item.productLink,
+
+        imageUrl:
+          item.imageUrl,
+
+        currentPrice,
+
+        originalPrice:
+          priceMax &&
+          priceMax > currentPrice
+            ? priceMax
+            : undefined,
+
+        discountPercent:
+          item.priceDiscountRate,
+
+        rating:
+          item.ratingStar
+            ? Number(item.ratingStar)
+            : undefined,
+
+        salesCount:
+          item.sales,
+
+        // A API retorna 0.13 para 13%.
+        // Nosso motor trabalha com 13.
+        commissionRate:
+          Number(
+            item.commissionRate,
+          ) * 100,
+
+        commissionValue:
+          Number(item.commission),
+
+        category:
+          item.productCatIds
+            ?.join(','),
+
+        metadata: {
+          offerLink:
+            item.offerLink,
+
+          shopId:
+            item.shopId,
+
+          sellerCommissionRate:
+            item.sellerCommissionRate,
+
+          shopeeCommissionRate:
+            item.shopeeCommissionRate,
+        },
+      };
+    });
+  }
+
+  async generateAffiliateLink(
+    product: NormalizedProduct,
+  ): Promise<string> {
+    const offerLink =
+      product.metadata?.offerLink;
+
+    if (
+      typeof offerLink !== 'string' ||
+      !offerLink
+    ) {
+      throw new Error(
+        `Offer Link não encontrado para ${product.externalId}`,
+      );
+    }
+
+    return offerLink;
+  }
 }
 
 export class ShopeeCsvProvider implements MarketplaceProvider {

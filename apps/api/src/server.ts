@@ -8,7 +8,7 @@ import {
 
 import {
   MockMercadoLivreProvider,
-  ShopeeCsvProvider,
+  ShopeeApiProvider,
 } from '@ofertas/marketplaces';
 
 const app = Fastify({ logger: true });
@@ -22,14 +22,17 @@ const engine = new OfferEngine({
   ),
 });
 
-const shopeeCsvPath = process.env.SHOPEE_CSV_PATH;
+const shopeeAppId = process.env.SHOPEE_API_APP_ID;
+const shopeeApiSecret = process.env.SHOPEE_API_SECRET;
 
-if (!shopeeCsvPath) {
-  throw new Error('SHOPEE_CSV_PATH não está definido.');
+if (!shopeeAppId || !shopeeApiSecret) {
+  throw new Error(
+    'SHOPEE_API_APP_ID e SHOPEE_API_SECRET devem estar definidos.',
+  );
 }
 
 const providers = [
-  new ShopeeCsvProvider(shopeeCsvPath),
+  new ShopeeApiProvider(shopeeAppId, shopeeApiSecret),
   new MockMercadoLivreProvider(),
 ];
 
