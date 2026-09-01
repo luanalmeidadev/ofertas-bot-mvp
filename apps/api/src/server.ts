@@ -46,7 +46,16 @@ app.get('/health', async () => ({
 /**
  * IMPORTA E ANALISA OFERTAS
  */
-app.post('/offers/import', async () => {
+type ImportOffersResult = {
+  imported: number;
+  detected: number;
+  queued: number;
+  queueError: string | null;
+};
+
+let activeImport: Promise<ImportOffersResult> | null = null;
+
+async function performImportOffers(): Promise<ImportOffersResult> {
   let imported = 0;
   let detected = 0;
   const autoOfferIds: string[] = [];
@@ -200,6 +209,22 @@ app.post('/offers/import', async () => {
     queued,
     queueError,
   };
+}
+
+function importOffers(): Promise<ImportOffersResult> {
+  if (activeImport) {
+    return activeImport;
+  }
+
+  activeImport = performImportOffers().finally(() => {
+    activeImport = null;
+  });
+
+  return activeImport;
+}
+
+app.post('/offers/import', async () => {
+  return importOffers();
 });
 
 /**
@@ -870,6 +895,42 @@ return {
   },
 );
 
+const importIntervalMinutes = Number(
+  process.env.SHOPEE_IMPORT_INTERVAL_MINUTES ?? 30,
+);
+const importIntervalMs =
+  importIntervalMinutes * 60 * 1000;
+
+async function runScheduledImport() {
+  if (activeImport) {
+    return;
+  }
+
+  try {
+    const result = await importOffers();
+
+    app.log.info(
+      {
+        imported: result.imported,
+        detected: result.detected,
+        queued: result.queued,
+        queueError: result.queueError,
+      },
+      'Importação agendada concluída.',
+    );
+  } catch {
+    app.log.error(
+      {
+        imported: null,
+        detected: null,
+        queued: null,
+        queueError: 'Falha ao executar importação agendada.',
+      },
+      'Importação agendada falhou.',
+    );
+  }
+}
+
 const port = Number(
   process.env.API_PORT ?? 3333,
 );
@@ -878,3 +939,14 @@ await app.listen({
   port,
   host: '0.0.0.0',
 });
+
+app.log.info(
+  {
+    intervalMinutes: importIntervalMinutes,
+  },
+  'Scheduler de importação iniciado.',
+);
+
+setInterval(() => {
+  void runScheduledImport();
+}, importIntervalMs);
